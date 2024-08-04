@@ -100,3 +100,34 @@ x = (1,2,3,4,5)
 print(x)
 print(len(x)) 
 
+#1
+def electric(units):
+    if units <= 100:
+        bill_amount = 0
+    elif units <= 200:
+        bill_amount = 5 * (units - 100)
+    else:
+        bill_amount = 5 * 100 + 10 * (units - 200)
+    
+    return bill_amount
+units_consumed = float(input("Enter the number of units consumed: "))
+total_bill = electric(units_consumed)
+print(total_bill)
+
+#2
+l1 = [1, 2, 3, 4]
+l2 = [5, 6, 7, 8]
+
+result_dict = {str(key): value for key, value in zip(l1, l2)}
+
+print(result_dict)
+
+#3
+class Vehicle:
+    def abc(self):
+        print("max speed is 300")
+        print("car milage is 1km/h")
+# Example usage
+v1 = Vehicle()
+v1.abc()
+
