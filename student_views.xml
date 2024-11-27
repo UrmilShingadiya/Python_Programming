@@ -13,3 +13,189 @@
         action="action_student_management"
         sequence="10"/>
 </odoo>
+
+
+py code: 
+# -*- coding: utf-8 -*-
+from odoo import api, fields, models
+from datetime import date, datetime, timedelta
+
+
+class ShopSummaryReport(models.TransientModel):
+    _name = 'shop.summary.report.wizard'
+    _description = 'Shop Summary Report Wizard'
+    
+    select_date = fields.Selection([('today','Today'),('yesterday', 'Yesterday'),
+                                    ('this_week','This Week'),('last_week','Last Week'),
+                                    ('month','This Month'),
+                                    ('last_month', 'Last Month'),('year', 'This Year')])
+    from_date = fields.Date(string="From Date", required=True)
+    to_date = fields.Date(string="To Date", required=True)
+    shop_id = fields.Many2many('bsi.shop', string="Shops", required=True)
+    sale_detail_line_ids = fields.Many2many(
+        'bsi.sales.line', string="Sale Detail lines")
+    is_selected = fields.Boolean(string="Select All Shops", default=False)
+    
+    def action_print(self):
+        sale_obj_detail = self.env['bsi.sales'].search(
+            [('shop_id', 'in', self.shop_id.ids),
+            ('date', '>=', self.from_date),
+            ('date', '<=', self.to_date),
+            ]
+        )
+        print("p---------------------",sale_obj_detail)
+        sale_list = []
+        dict={}
+
+        if sale_obj_detail:
+            for rec in sale_obj_detail:
+                for record in rec.sales_line_ids: 
+                    shop_id = rec.shop_id.id
+                    sale_list.append(shop_id)
+                    if shop_id not in dict:
+                        dict[shop_id] = {
+                            'shop_name': rec.shop_id.id,
+                            'total_qty': record.qty,
+                            'total_amount': record.total_amount,
+                            'total_price': record.price,
+                        } 
+                    else:
+                        dict[shop_id]['total_qty'] += record.qty
+                        dict[shop_id]['total_amount'] += record.total_amount 
+                        dict[shop_id]['total_price'] += record.price 
+
+            sales_line_ids = []
+            if dict:
+                for shop_id, data in dict.items():
+                        sales_line_ids.append((0, 0, {
+                            'shop_id': data['shop_name'],
+                            'qty': data['total_qty'],
+                            'total_amount': data['total_amount'],
+                            'price':data['total_price'],
+                        }))
+
+            if sales_line_ids:
+                self.sale_detail_line_ids = False
+                self.sale_detail_line_ids = sales_line_ids
+            else :
+                self.sale_detail_line_ids = False 
+
+            return self.env.ref('bsi_sun_article_management.bsi_action_report_shop_summary_reports').report_action(self)
+
+    @api.onchange('select_date')
+    def _onchange_select_date(self):
+        today = datetime.today().date()
+            
+        if self.select_date == 'today':
+            self.from_date = today
+            self.to_date = today
+        elif self.select_date == 'yesterday':
+            yesterday = today - timedelta(days=1)
+            self.from_date = yesterday
+            self.to_date = yesterday    
+        elif self.select_date == 'this_week':
+            start_of_this_week = today - timedelta(days=today.weekday()) 
+            end_of_this_week = start_of_this_week + timedelta(days=6)  
+            self.from_date = start_of_this_week
+            self.to_date = end_of_this_week    
+        elif self.select_date == 'month':
+            self.from_date = today.replace(day=1)  
+            next_month = today.month % 12 + 1
+            next_year = today.year + (today.month // 12)
+            self.to_date = (today.replace(year=next_year, month=next_month, day=1) - timedelta(days=1)) 
+        elif self.select_date == 'last_week':
+            start_of_last_week = today - timedelta(days=today.weekday() + 7)  
+            end_of_last_week = start_of_last_week + timedelta(days=6)  
+            self.from_date = start_of_last_week
+            self.to_date = end_of_last_week     
+        elif self.select_date == 'last_month':                              
+            first_day_last_month = (today.replace(day=1) - timedelta(days=1)).replace(day=1)
+            last_day_last_month = first_day_last_month + timedelta(days=(first_day_last_month.replace(month=first_day_last_month.month % 12 + 1, day=1) - timedelta(days=1)).day)
+            self.from_date = first_day_last_month
+            self.to_date = last_day_last_month     
+        elif self.select_date == 'year':
+            self.from_date = today.replace(month=1, day=1)  
+            self.to_date = today.replace(month=12, day=31)    
+
+    @api.onchange('is_selected')
+    def _onchange_is_selected(self):
+        if self.is_selected:
+            all_shops = self.env['bsi.shop'].search([])
+            self.shop_id = [(6, 0, all_shops.ids)]
+        else:
+            self.shop_id = False
+xml code:
+ <odoo>
+    <template id="bsi_report_shop_summary_report">
+       <t t-call="web.html_container">
+            <t t-foreach="docs" t-as="o">
+                <t t-call="web.external_layout">
+                    <div class="page">
+                        <table width="100%" cellspacing="30px">
+                            <tr>
+                                <td width="30%" style="color:black;"><h5><b>Shop : 
+                                <span t-field="o.shop_id"/>
+                                </b></h5></td>
+                                <td width="30%" align="left" style="color:black;"><h5><b>From Date : 
+                                <span t-field="o.from_date"/></b></h5></td>
+                                <td width="30%" align="left" style="color:black;background-color:white;">
+                                <h5><b>To Date : <span t-field="o.to_date"/></b></h5></td>
+                            </tr>
+                        </table>
+                        
+                        <table style="margin-top:20px;text-align:center" 
+                            width="100%" border="1">
+                            <tr>
+                                <td width="18%" style="border-bottom:1px solid gray;">
+                                    <b>Shop Name</b></td>
+                               
+                                <td width="10%" style="border-bottom:1px solid gray;">
+                                    <b>Quantity</b></td>
+                                <td width="15%" style="border-bottom:1px solid gray;">
+                                    <b>Price</b></td>
+                                <td width="20%" style="border-bottom:1px solid gray;">
+                                    <b>Subtotal</b></td>
+                            </tr>
+                            
+                            <t t-set="total_amount" t-value="0"/>
+                            <t t-set="total_qty" t-value="0"/>
+                            <t t-set="total_price" t-value="0"/>
+                            <tr t-foreach="o.sale_detail_line_ids" t-as="line">
+                                <td style="border-top:1px solid gray;">
+                                    <span t-field="line.shop_id"/></td>
+                                
+                              
+                                <td style="border-top:1px solid gray;">
+                                    <span t-field="line.qty"/>
+                                    <t t-set="total_qty" t-value="total_qty+line.qty"/>
+                                </td>
+                                <td style="border-top:1px solid gray;">
+                                    <span t-field="line.price"/></td>   
+                                <td style="border-top:1px solid gray;">
+                                    <span t-esc="line.total_amount"/>
+                                    <t t-set="total_amount" t-value="total_amount+line.total_amount"/>
+                                    <t t-set="total_price" t-value="total_price + line.price"/>
+                                </td>
+                            </tr>
+                        </table>
+                        <span><h5 align="right" style="margin-top:50px;color:black;">
+                            <b style="margin-top:4px;border-top:1px solid gray;">Total Quantity : 
+                                <span t-esc="total_qty"/>
+                        </b></h5></span>
+                        <span><h5 align="right" style="margin-top:50px;color:black;">
+                            <b style="margin-top:5px;border-top:1px solid gray;">Total : 
+                                <span t-field="o.sale_detail_line_ids.currency_id.symbol"/>
+                                <span t-esc="total_amount"/>
+                        </b></h5></span>
+                         <span><h5 align="right" style="margin-top:50px;color:black;">
+                                <b style="margin-top:5px;border-top:1px solid gray;">Total Price: 
+                                <span t-field="o.sale_detail_line_ids.currency_id.symbol"/>
+                                <span t-esc="total_price"/>
+                        </b></h5></span>   
+                    </div>
+                </t>
+            </t>
+        </t>
+    </template>
+</odoo>
+               
